@@ -1,4 +1,5 @@
 import type { MealPeriod } from "./types";
+import { formatDateISO } from "./date";
 
 interface TimeRange {
   start: number; // minutes since midnight
@@ -42,14 +43,19 @@ const SCHEDULE: Record<string, Record<number, TimeRange>> = {
   },
 };
 
+export interface AutoMealSelection {
+  date: string;
+  mealId: number;
+}
+
 /**
- * Returns the meal period ID that best matches the current time.
+ * Returns the best date + meal period to show right now.
  *
- * Logic: if currently within a meal window, select that meal.
- * If between meals, select the next upcoming meal.
- * If all meals are over for the day, fall back to the first available period.
+ * - During a meal → that meal, today
+ * - Between meals → next upcoming meal, today
+ * - After all meals end for the day → Breakfast, tomorrow
  */
-export function getCurrentMealPeriodId(periods: MealPeriod[]): number | null {
+export function getAutoMealSelection(periods: MealPeriod[]): AutoMealSelection | null {
   if (periods.length === 0) return null;
 
   const now = new Date();
@@ -57,6 +63,7 @@ export function getCurrentMealPeriodId(periods: MealPeriod[]): number | null {
   const mins = now.getHours() * 60 + now.getMinutes();
 
   const periodByName = new Map(periods.map((p) => [p.name, p.id]));
+  const today = formatDateISO(now);
 
   const todayMeals: { name: string; id: number; start: number; end: number }[] = [];
   for (const mealName of ["Breakfast", "Lunch", "Dinner"]) {
@@ -68,19 +75,42 @@ export function getCurrentMealPeriodId(periods: MealPeriod[]): number | null {
   }
   todayMeals.sort((a, b) => a.start - b.start);
 
+  // Currently serving?
   for (const meal of todayMeals) {
     if (mins >= meal.start && mins < meal.end) {
-      return meal.id;
+      return { date: today, mealId: meal.id };
     }
   }
 
+  // Between meals? Next upcoming one today.
   for (const meal of todayMeals) {
     if (mins < meal.start) {
-      return meal.id;
+      return { date: today, mealId: meal.id };
     }
   }
 
-  return periods[0].id;
+  // All meals over → show tomorrow's breakfast
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowISO = formatDateISO(tomorrow);
+  const tomorrowDay = tomorrow.getDay();
+
+  const breakfastRange = SCHEDULE["Breakfast"]?.[tomorrowDay];
+  const breakfastId = periodByName.get("Breakfast");
+  if (breakfastRange && breakfastId !== undefined) {
+    return { date: tomorrowISO, mealId: breakfastId };
+  }
+
+  // Tomorrow has no breakfast (e.g. Sunday) → fall back to first available meal tomorrow
+  for (const mealName of ["Lunch", "Dinner"]) {
+    const range = SCHEDULE[mealName]?.[tomorrowDay];
+    const id = periodByName.get(mealName);
+    if (range && id !== undefined) {
+      return { date: tomorrowISO, mealId: id };
+    }
+  }
+
+  return { date: today, mealId: periods[0].id };
 }
 
 /** Filter out meals we don't want to show (e.g. Brunch). */

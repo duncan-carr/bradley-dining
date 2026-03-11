@@ -8,7 +8,7 @@ import { useLocalVotes } from "@/hooks/useLocalVotes";
 import { useStationOrder } from "@/hooks/useStationOrder";
 import { parseMenuItem } from "@/lib/types";
 import type { Station, ParsedMenuItem } from "@/lib/types";
-import { getCurrentMealPeriodId, filterMealPeriods } from "@/lib/mealSchedule";
+import { getAutoMealSelection, filterMealPeriods } from "@/lib/mealSchedule";
 import { localToday } from "@/lib/date";
 import DatePicker from "@/components/DatePicker";
 import MealPeriodTabs from "@/components/MealPeriodTabs";
@@ -81,8 +81,11 @@ export default function Home() {
   useEffect(() => {
     if (!location || userOverrodeMeal.current) return;
     if (date === localToday()) {
-      const autoId = getCurrentMealPeriodId(visiblePeriods);
-      if (autoId !== null) setMealPeriod(autoId);
+      const auto = getAutoMealSelection(visiblePeriods);
+      if (auto) {
+        setDate(auto.date);
+        setMealPeriod(auto.mealId);
+      }
     }
   }, [location, date, visiblePeriods]);
 
@@ -96,11 +99,16 @@ export default function Home() {
 
   const handleDateChange = (newDate: string) => {
     userOverrodeMeal.current = false;
-    setDate(newDate);
     if (newDate === localToday()) {
-      const autoId = getCurrentMealPeriodId(visiblePeriods);
-      if (autoId !== null) setMealPeriod(autoId);
+      const auto = getAutoMealSelection(visiblePeriods);
+      if (auto) {
+        setDate(auto.date);
+        setMealPeriod(auto.mealId);
+      } else {
+        setDate(newDate);
+      }
     } else {
+      setDate(newDate);
       const sorted = [...visiblePeriods].sort((a, b) => a.position - b.position);
       if (sorted.length > 0) setMealPeriod(sorted[0].id);
     }
