@@ -217,7 +217,12 @@ export default function Home() {
 
   const totalItems = parsedItems.length;
 
-  const isToday = date === localToday();
+  const today = localToday();
+  const isToday = date === today;
+
+  // Check if the auto-selection would place us on tomorrow (dining closed for the night)
+  const autoSelection = useMemo(() => getAutoMealSelection(visiblePeriods), [visiblePeriods]);
+  const isAutoTomorrow = autoSelection !== null && autoSelection.date !== today && date === autoSelection.date;
 
   const viewingDateLabel = (() => {
     const d = new Date(date + "T12:00:00");
@@ -246,7 +251,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* "Back to today" banner */}
+        {/* Date context banner */}
         <div
           className="grid transition-[grid-template-rows] duration-300 ease-in-out"
           style={{ gridTemplateRows: isToday ? "0fr" : "1fr" }}
@@ -254,18 +259,26 @@ export default function Home() {
           <div className="overflow-hidden">
             <div className="border-t border-border bg-bradley-red/5">
               <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-2 sm:px-5">
-                <p className="text-xs font-medium text-muted-foreground">
-                  Viewing <span className="font-semibold text-foreground">{viewingDateLabel}</span>
-                </p>
-                <button
-                  onClick={() => handleDateChange(localToday())}
-                  className="flex items-center gap-1.5 rounded-lg bg-bradley-red px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-bradley-red/90 active:scale-95"
-                >
-                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
-                  </svg>
-                  Back to Today
-                </button>
+                {isAutoTomorrow ? (
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Dining is closed for tonight &mdash; showing <span className="font-semibold text-foreground">tomorrow&apos;s menu</span>
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Viewing <span className="font-semibold text-foreground">{viewingDateLabel}</span>
+                    </p>
+                    <button
+                      onClick={() => handleDateChange(today)}
+                      className="flex shrink-0 items-center gap-1.5 rounded-lg bg-bradley-red px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-bradley-red/90 active:scale-95"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                      </svg>
+                      Back to Today
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>
