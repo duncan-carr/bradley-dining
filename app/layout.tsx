@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { DM_Sans, DM_Serif_Display } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next"
 import "./globals.css";
 import ConvexClientProvider from "@/components/ConvexClientProvider";
 
@@ -39,6 +40,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${dmSans.variable} ${dmSerif.variable} antialiased`}>
+        <Analytics />
         <ConvexClientProvider>{children}</ConvexClientProvider>
       </body>
     </html>
