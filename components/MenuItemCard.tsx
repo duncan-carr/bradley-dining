@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { ParsedMenuItem } from "@/lib/types";
 import VoteButtons from "./VoteButtons";
 
@@ -11,7 +12,16 @@ interface MenuItemCardProps {
   onVote: (sku: string, vote: "up" | "down" | null) => void;
   animDelay?: number;
   showAllergens?: boolean;
+  isFavorite?: boolean;
+  onToggleFavorite?: (sku: string) => void;
+  visibleDietaryLabels?: Set<string>;
 }
+
+const DIETARY_STYLES: Record<string, string> = {
+  Vegan: "bg-dietary-vegan-bg text-dietary-vegan-text",
+  Vegetarian: "bg-dietary-vegetarian-bg text-dietary-vegetarian-text",
+  "Gluten Free": "bg-dietary-gluten-free-bg text-dietary-gluten-free-text",
+};
 
 function NutritionPill({ label, value, unit }: { label: string; value: string; unit?: string }) {
   if (!value || value === "0") return null;
@@ -22,6 +32,18 @@ function NutritionPill({ label, value, unit }: { label: string; value: string; u
       <span className="font-semibold">{label}</span>
       <span>{Math.round(display)}{unit}</span>
     </span>
+  );
+}
+
+function NutritionRow({ label, value, unit }: { label: string; value: string; unit: string }) {
+  if (!value || value === "0") return null;
+  const display = parseFloat(value);
+  if (isNaN(display)) return null;
+  return (
+    <div className="flex items-center justify-between border-b border-border-light py-1.5 last:border-b-0">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-xs font-semibold text-foreground tabular-nums">{Math.round(display)}{unit}</span>
+    </div>
   );
 }
 
@@ -60,7 +82,75 @@ function AllergenBadges({ item }: { item: ParsedMenuItem }) {
   return null;
 }
 
-export default function MenuItemCard({ item, upvotes, downvotes, localVote, onVote, animDelay = 0, showAllergens = true }: MenuItemCardProps) {
+function DietaryBadges({ labels }: { labels: string[] }) {
+  if (labels.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {labels.map((label) => (
+        <span
+          key={label}
+          className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[0.6875rem] font-semibold ${DIETARY_STYLES[label] ?? "bg-nutrition-bg text-nutrition-text"}`}
+        >
+          {label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function ExpandedDetails({ item }: { item: ParsedMenuItem }) {
+  return (
+    <div className="mt-2 border-t border-border-light pt-2">
+      {item.hasDetailedNutrition && (
+        <div className="mb-2">
+          <p className="mb-1 text-[0.6875rem] font-bold tracking-wide text-muted uppercase">
+            Nutrition Facts
+            {item.servingCombined && (
+              <span className="ml-1.5 font-normal normal-case tracking-normal text-muted-foreground">
+                &middot; Serving {item.servingCombined}
+              </span>
+            )}
+          </p>
+          <div className="rounded-lg bg-surface-warm px-3 py-1">
+            <NutritionRow label="Sodium" value={item.sodium} unit="mg" />
+            <NutritionRow label="Saturated Fat" value={item.saturatedFat} unit="g" />
+            <NutritionRow label="Trans Fat" value={item.transFat} unit="g" />
+            <NutritionRow label="Cholesterol" value={item.cholesterol} unit="mg" />
+            <NutritionRow label="Dietary Fiber" value={item.dietaryFiber} unit="g" />
+            <NutritionRow label="Sugars" value={item.sugars} unit="g" />
+          </div>
+        </div>
+      )}
+
+      {item.ingredients && (
+        <div>
+          <p className="mb-1 text-[0.6875rem] font-bold tracking-wide text-muted uppercase">
+            Ingredients
+          </p>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {item.ingredients}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function MenuItemCard({
+  item,
+  upvotes,
+  downvotes,
+  localVote,
+  onVote,
+  animDelay = 0,
+  showAllergens = true,
+  isFavorite = false,
+  onToggleFavorite,
+  visibleDietaryLabels,
+}: MenuItemCardProps) {
+  const [expanded, setExpanded] = useState(false);
+  const canExpand = item.hasDetailedNutrition || !!item.ingredients;
+
   return (
     <div
       className="group relative rounded-xl border border-border-light bg-background p-3 transition-all duration-200 hover:border-border hover:shadow-sm sm:p-3.5"
@@ -68,9 +158,32 @@ export default function MenuItemCard({ item, upvotes, downvotes, localVote, onVo
     >
       <div className="flex min-w-0 flex-col gap-1">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="text-sm font-semibold leading-tight text-foreground sm:text-[0.9375rem]">
-            {item.marketingName}
-          </h3>
+          <div className="flex min-w-0 items-start gap-1.5">
+            {onToggleFavorite && (
+              <button
+                onClick={() => onToggleFavorite(item.sku)}
+                className={`mt-0.5 shrink-0 transition-all active:scale-90 ${
+                  isFavorite
+                    ? "text-favorite"
+                    : "text-muted/40 hover:text-favorite/60"
+                }`}
+                aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+              >
+                <svg
+                  className={`h-4 w-4 ${isFavorite ? "animate-pop" : ""}`}
+                  fill={isFavorite ? "currentColor" : "none"}
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={isFavorite ? 0 : 2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                </svg>
+              </button>
+            )}
+            <h3 className="text-sm font-semibold leading-tight text-foreground sm:text-[0.9375rem]">
+              {item.marketingName}
+            </h3>
+          </div>
           <VoteButtons
             sku={item.sku}
             upvotes={upvotes}
@@ -86,14 +199,41 @@ export default function MenuItemCard({ item, upvotes, downvotes, localVote, onVo
           </p>
         )}
 
-        <div className="mt-0.5 flex flex-wrap gap-1">
+        {item.dietaryLabels.length > 0 && (() => {
+          const labels = visibleDietaryLabels
+            ? item.dietaryLabels.filter((l) => visibleDietaryLabels.has(l))
+            : item.dietaryLabels;
+          return labels.length > 0 ? <DietaryBadges labels={labels} /> : null;
+        })()}
+
+        <div className="mt-0.5 flex flex-wrap items-center gap-1">
           <NutritionPill label="Cal" value={item.calories} />
           <NutritionPill label="Protein" value={item.protein} unit="g" />
           <NutritionPill label="Fat" value={item.totalFat} unit="g" />
           <NutritionPill label="Carbs" value={item.totalCarbs} unit="g" />
+
+          {canExpand && (
+            <button
+              onClick={() => setExpanded((o) => !o)}
+              className="ml-auto inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-[0.6875rem] font-medium text-muted-foreground transition-colors hover:bg-surface-warm hover:text-foreground"
+            >
+              {expanded ? "Less" : "More"}
+              <svg
+                className={`h-3 w-3 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {showAllergens && <AllergenBadges item={item} />}
+
+        {expanded && <ExpandedDetails item={item} />}
       </div>
     </div>
   );

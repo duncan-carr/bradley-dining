@@ -1,16 +1,19 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { Suspense, useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useLocationData, useRecipesData, useAllDayStationIds } from "@/hooks/useDiningData";
 import { useLocalVotes } from "@/hooks/useLocalVotes";
+import { useFavorites } from "@/hooks/useFavorites";
 import { useStationOrder } from "@/hooks/useStationOrder";
 import { parseMenuItem } from "@/lib/types";
 import type { Station, ParsedMenuItem } from "@/lib/types";
 import { getAutoMealSelection, filterMealPeriods } from "@/lib/mealSchedule";
 import { localToday } from "@/lib/date";
 import { useAllergenPreferences } from "@/hooks/useAllergenPreferences";
+import { useDietaryPreferences } from "@/hooks/useDietaryPreferences";
 import DatePicker from "@/components/DatePicker";
 import MealPeriodTabs from "@/components/MealPeriodTabs";
 import StationSection from "@/components/StationSection";
@@ -44,12 +47,44 @@ function LoadingSkeleton() {
   );
 }
 
-export default function Home() {
-  const [date, setDate] = useState(localToday);
-  const [mealPeriod, setMealPeriod] = useState<number | null>(null);
+function useUrlState() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const initialDate = searchParams.get("date") || null;
+  const initialMeal = searchParams.get("meal") ? parseInt(searchParams.get("meal")!, 10) : null;
+  const hasUrlParams = !!(initialDate || searchParams.get("meal"));
+
+  const syncUrl = useCallback(
+    (date: string, meal: number | null) => {
+      const params = new URLSearchParams();
+      params.set("date", date);
+      if (meal !== null) params.set("meal", String(meal));
+      router.replace(`?${params.toString()}`, { scroll: false });
+    },
+    [router]
+  );
+
+  return { initialDate, initialMeal, hasUrlParams, syncUrl };
+}
+
+export default function Page() {
+  return (
+    <Suspense>
+      <Home />
+    </Suspense>
+  );
+}
+
+function Home() {
+  const { initialDate, initialMeal, hasUrlParams, syncUrl } = useUrlState();
+  const [date, setDate] = useState(() => initialDate || localToday());
+  const [mealPeriod, setMealPeriod] = useState<number | null>(initialMeal);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const userOverrodeMeal = useRef(false);
+  const userOverrodeMeal = useRef(hasUrlParams);
   const allergenPrefs = useAllergenPreferences();
+  const dietaryPrefs = useDietaryPreferences();
+  const { favorites, isFavorite, toggleFavorite } = useFavorites();
 
   const [collapsedStations, setCollapsedStations] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set();
@@ -88,9 +123,10 @@ export default function Home() {
       if (auto) {
         setDate(auto.date);
         setMealPeriod(auto.mealId);
+        syncUrl(auto.date, auto.mealId);
       }
     }
-  }, [location, date, visiblePeriods]);
+  }, [location, date, visiblePeriods, syncUrl]);
 
   // Fallback: default to first period for non-today dates or when auto-selection doesn't apply.
   // Skips when auto-selection should handle it (today + location loaded) to avoid a race
@@ -100,7 +136,8 @@ export default function Home() {
     if (location && date === localToday() && !userOverrodeMeal.current) return;
     const sorted = [...visiblePeriods].sort((a, b) => a.position - b.position);
     setMealPeriod(sorted[0].id);
-  }, [mealPeriod, visiblePeriods, location, date]);
+    syncUrl(date, sorted[0].id);
+  }, [mealPeriod, visiblePeriods, location, date, syncUrl]);
 
   const handleDateChange = (newDate: string) => {
     userOverrodeMeal.current = false;
@@ -109,19 +146,24 @@ export default function Home() {
       if (auto) {
         setDate(auto.date);
         setMealPeriod(auto.mealId);
+        syncUrl(auto.date, auto.mealId);
       } else {
         setDate(newDate);
+        syncUrl(newDate, mealPeriod);
       }
     } else {
       setDate(newDate);
       const sorted = [...visiblePeriods].sort((a, b) => a.position - b.position);
+      const firstMeal = sorted.length > 0 ? sorted[0].id : mealPeriod;
       if (sorted.length > 0) setMealPeriod(sorted[0].id);
+      syncUrl(newDate, firstMeal);
     }
   };
 
   const handleMealSelect = (id: number) => {
     userOverrodeMeal.current = true;
     setMealPeriod(id);
+    syncUrl(date, id);
   };
 
   const stations: Station[] = useMemo(() => {
@@ -173,8 +215,10 @@ export default function Home() {
         }
       }
       items.sort((a, b) => {
-        const posA = parseFloat(a.attributes.find((at) => at.name === "position_in_menu")?.value ?? "9999");
-        const posB = parseFloat(b.attributes.find((at) => at.name === "position_in_menu")?.value ?? "9999");
+        const rawA = a.attributes.find((at) => at.name === "position_in_menu")?.value;
+        const posA = parseFloat(Array.isArray(rawA) ? rawA[0] : rawA ?? "9999");
+        const rawB = b.attributes.find((at) => at.name === "position_in_menu")?.value;
+        const posB = parseFloat(Array.isArray(rawB) ? rawB[0] : rawB ?? "9999");
         return posA - posB;
       });
       map.set(String(station.id), items);
@@ -182,8 +226,10 @@ export default function Home() {
     return map;
   }, [recipes, parsedItems]);
 
+  const totalFilterCount = allergenPrefs.activeFilterCount + dietaryPrefs.activeFilterCount;
+
   const filteredStationItemMap = useMemo(() => {
-    if (allergenPrefs.activeFilterCount === 0) return stationItemMap;
+    if (totalFilterCount === 0) return stationItemMap;
     const filtered = new Map<string, ParsedMenuItem[]>();
     for (const [stationId, items] of stationItemMap) {
       filtered.set(
@@ -191,12 +237,18 @@ export default function Home() {
         items.filter((item) => {
           if (allergenPrefs.hideUnknown && item.allergenStatus === "unknown") return false;
           if (allergenPrefs.hiddenAllergens.size > 0 && item.allergens.some((a) => allergenPrefs.hiddenAllergens.has(a))) return false;
+          if (dietaryPrefs.requiredLabels.size > 0) {
+            for (const label of dietaryPrefs.requiredLabels) {
+              if (!item.dietaryLabels.includes(label)) return false;
+            }
+          }
+          if (dietaryPrefs.favoritesOnly && !favorites.has(item.sku)) return false;
           return true;
         })
       );
     }
     return filtered;
-  }, [stationItemMap, allergenPrefs.hiddenAllergens, allergenPrefs.hideUnknown, allergenPrefs.activeFilterCount]);
+  }, [stationItemMap, allergenPrefs.hiddenAllergens, allergenPrefs.hideUnknown, totalFilterCount, dietaryPrefs.requiredLabels, dietaryPrefs.favoritesOnly, favorites]);
 
   const filteredItemCount = useMemo(() => {
     let count = 0;
@@ -270,7 +322,7 @@ export default function Home() {
     return d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
   })();
 
-  const settingsBadgeCount = allergenPrefs.activeFilterCount;
+  const settingsBadgeCount = allergenPrefs.activeFilterCount + dietaryPrefs.activeFilterCount;
 
   return (
     <div className="min-h-screen bg-background">
@@ -360,7 +412,7 @@ export default function Home() {
                     )}
                   </button>
                   <p className="text-sm text-muted-foreground">
-                    {allergenPrefs.activeFilterCount > 0
+                    {totalFilterCount > 0
                       ? `${filteredItemCount} of ${totalItems} items`
                       : `${totalItems} ${totalItems === 1 ? "item" : "items"} on the menu`}
                   </p>
@@ -382,6 +434,15 @@ export default function Home() {
                         onToggleShowOnItems={allergenPrefs.setShowOnItems}
                         onClearAllAllergens={allergenPrefs.clearAll}
                         activeFilterCount={allergenPrefs.activeFilterCount}
+                        visibleDietaryLabels={dietaryPrefs.visibleLabels}
+                        requiredDietaryLabels={dietaryPrefs.requiredLabels}
+                        favoritesOnly={dietaryPrefs.favoritesOnly}
+                        onToggleDietaryVisible={dietaryPrefs.toggleVisible}
+                        onToggleDietaryRequired={dietaryPrefs.toggleRequired}
+                        onToggleFavoritesOnly={dietaryPrefs.setFavoritesOnly}
+                        onClearDietaryFilters={dietaryPrefs.clearFilters}
+                        dietaryFilterCount={dietaryPrefs.activeFilterCount}
+                        hasFavorites={favorites.size > 0}
                         orderedStationIds={orderedMealStationIds}
                         stationById={stationById}
                         stationItemCounts={stationItemCounts}
@@ -453,6 +514,9 @@ export default function Home() {
                   expanded={!collapsedStations.has(id)}
                   onToggle={() => toggleStation(id)}
                   showAllergens={allergenPrefs.showOnItems}
+                  isFavorite={isFavorite}
+                  onToggleFavorite={toggleFavorite}
+                  visibleDietaryLabels={dietaryPrefs.visibleLabels}
                 />
               );
             })}
@@ -480,6 +544,9 @@ export default function Home() {
                       expanded={!collapsedStations.has(station.id.toString())}
                       onToggle={() => toggleStation(station.id.toString())}
                       showAllergens={allergenPrefs.showOnItems}
+                      isFavorite={isFavorite}
+                      onToggleFavorite={toggleFavorite}
+                      visibleDietaryLabels={dietaryPrefs.visibleLabels}
                     />
                   );
                 })}

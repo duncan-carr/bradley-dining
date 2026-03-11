@@ -13,6 +13,9 @@ interface StationSectionProps {
   expanded: boolean;
   onToggle: () => void;
   showAllergens?: boolean;
+  isFavorite: (sku: string) => boolean;
+  onToggleFavorite: (sku: string) => void;
+  visibleDietaryLabels?: Set<string>;
 }
 
 export default function StationSection({
@@ -25,6 +28,9 @@ export default function StationSection({
   expanded,
   onToggle,
   showAllergens = true,
+  isFavorite,
+  onToggleFavorite,
+  visibleDietaryLabels,
 }: StationSectionProps) {
   if (items.length === 0) return null;
 
@@ -70,6 +76,9 @@ export default function StationSection({
                   onVote={onVote}
                   animDelay={i * 30}
                   showAllergens={showAllergens}
+                  isFavorite={isFavorite(item.sku)}
+                  onToggleFavorite={onToggleFavorite}
+                  visibleDietaryLabels={visibleDietaryLabels}
                 />
               );
             })}

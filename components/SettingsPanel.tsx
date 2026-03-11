@@ -20,6 +20,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ALL_ALLERGENS } from "@/hooks/useAllergenPreferences";
+import { DIETARY_LABELS } from "@/hooks/useDietaryPreferences";
 import type { Station } from "@/lib/types";
 
 /* ── Toggle switch ── */
@@ -135,6 +136,21 @@ function SortableStationRow({
 
 /* ── Main settings panel ── */
 
+const DIETARY_CHIP_STYLES: Record<string, { active: string; inactive: string }> = {
+  Vegan: {
+    active: "bg-dietary-vegan-text text-white shadow-sm dark:bg-dietary-vegan-text dark:text-black",
+    inactive: "bg-dietary-vegan-bg text-dietary-vegan-text hover:opacity-80",
+  },
+  Vegetarian: {
+    active: "bg-dietary-vegetarian-text text-white shadow-sm dark:bg-dietary-vegetarian-text dark:text-black",
+    inactive: "bg-dietary-vegetarian-bg text-dietary-vegetarian-text hover:opacity-80",
+  },
+  "Gluten Free": {
+    active: "bg-dietary-gluten-free-text text-white shadow-sm dark:bg-dietary-gluten-free-text dark:text-black",
+    inactive: "bg-dietary-gluten-free-bg text-dietary-gluten-free-text hover:opacity-80",
+  },
+};
+
 interface SettingsPanelProps {
   // Allergen props
   hiddenAllergens: Set<string>;
@@ -145,6 +161,16 @@ interface SettingsPanelProps {
   onToggleShowOnItems: (value: boolean) => void;
   onClearAllAllergens: () => void;
   activeFilterCount: number;
+  // Dietary props
+  visibleDietaryLabels: Set<string>;
+  requiredDietaryLabels: Set<string>;
+  favoritesOnly: boolean;
+  onToggleDietaryVisible: (label: string) => void;
+  onToggleDietaryRequired: (label: string) => void;
+  onToggleFavoritesOnly: (value: boolean) => void;
+  onClearDietaryFilters: () => void;
+  dietaryFilterCount: number;
+  hasFavorites: boolean;
   // Station order props
   orderedStationIds: string[];
   stationById: Map<string, Station>;
@@ -164,6 +190,15 @@ export default function SettingsPanel({
   onToggleShowOnItems,
   onClearAllAllergens,
   activeFilterCount,
+  visibleDietaryLabels,
+  requiredDietaryLabels,
+  favoritesOnly,
+  onToggleDietaryVisible,
+  onToggleDietaryRequired,
+  onToggleFavoritesOnly,
+  onClearDietaryFilters,
+  dietaryFilterCount,
+  hasFavorites,
   orderedStationIds,
   stationById,
   stationItemCounts,
@@ -253,6 +288,82 @@ export default function SettingsPanel({
             </span>
             <ToggleSwitch checked={showOnItems} onChange={onToggleShowOnItems} />
           </div>
+        </div>
+      </div>
+
+      {/* ── Dietary Preferences ── */}
+      <div className="mt-3 border-t border-border-light pt-3">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            Show only
+          </h3>
+          <button
+            onClick={onClearDietaryFilters}
+            className={`rounded-md px-2 py-1 text-[0.6875rem] font-semibold transition-colors ${
+              dietaryFilterCount > 0
+                ? "text-muted-foreground hover:bg-surface-warm hover:text-foreground"
+                : "pointer-events-none text-transparent"
+            }`}
+            aria-hidden={dietaryFilterCount === 0}
+            tabIndex={dietaryFilterCount === 0 ? -1 : 0}
+          >
+            Clear
+          </button>
+        </div>
+
+        <div className="mt-2.5 flex flex-wrap gap-1.5 sm:gap-2">
+          {DIETARY_LABELS.map((label) => {
+            const active = requiredDietaryLabels.has(label);
+            const styles = DIETARY_CHIP_STYLES[label];
+            return (
+              <button
+                key={label}
+                onClick={() => onToggleDietaryRequired(label)}
+                className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all active:scale-95 sm:text-[0.8125rem] ${
+                  active ? styles.active : styles.inactive
+                }`}
+              >
+                {label}
+                {active && (
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                )}
+              </button>
+            );
+          })}
+          <button
+            onClick={() => onToggleFavoritesOnly(!favoritesOnly)}
+            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all active:scale-95 sm:text-[0.8125rem] ${
+              favoritesOnly
+                ? "bg-favorite text-white shadow-sm"
+                : hasFavorites
+                  ? "bg-favorite-bg text-favorite hover:opacity-80"
+                  : "bg-surface-warm text-muted opacity-50 pointer-events-none"
+            }`}
+            disabled={!hasFavorites && !favoritesOnly}
+          >
+            <svg className="h-3 w-3" fill={favoritesOnly ? "currentColor" : "none"} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+            </svg>
+            Favorites
+            {favoritesOnly && (
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
+            )}
+          </button>
+        </div>
+
+        <div className="mt-3 flex flex-col gap-2 border-t border-border-light pt-3">
+          {DIETARY_LABELS.map((label) => (
+            <div key={label} className="flex items-center justify-between gap-3 rounded-lg px-1 py-0.5">
+              <span className="text-xs font-medium text-muted-foreground sm:text-sm">
+                Show {label} labels on items
+              </span>
+              <ToggleSwitch checked={visibleDietaryLabels.has(label)} onChange={() => onToggleDietaryVisible(label)} />
+            </div>
+          ))}
         </div>
       </div>
 

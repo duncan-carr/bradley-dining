@@ -25,6 +25,14 @@
   --allergen-text: #92400E;
   --allergen-active-bg: #C41230;
   --allergen-active-text: #FFFFFF;
+  --dietary-vegan-bg: #ECFDF5;
+  --dietary-vegan-text: #065F46;
+  --dietary-vegetarian-bg: #F0FDF4;
+  --dietary-vegetarian-text: #166534;
+  --dietary-gluten-free-bg: #EFF6FF;
+  --dietary-gluten-free-text: #1E40AF;
+  --favorite: #E11D48;
+  --favorite-bg: #FFF1F2;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -48,6 +56,14 @@
     --allergen-text: #FBBF24;
     --allergen-active-bg: #C41230;
     --allergen-active-text: #FFFFFF;
+    --dietary-vegan-bg: rgba(16, 185, 129, 0.15);
+    --dietary-vegan-text: #6EE7B7;
+    --dietary-vegetarian-bg: rgba(34, 197, 94, 0.12);
+    --dietary-vegetarian-text: #86EFAC;
+    --dietary-gluten-free-bg: rgba(59, 130, 246, 0.15);
+    --dietary-gluten-free-text: #93C5FD;
+    --favorite: #FB7185;
+    --favorite-bg: rgba(225, 29, 72, 0.15);
   }
 }
 
@@ -76,6 +92,14 @@
   --color-allergen-text: var(--allergen-text);
   --color-allergen-active-bg: var(--allergen-active-bg);
   --color-allergen-active-text: var(--allergen-active-text);
+  --color-dietary-vegan-bg: var(--dietary-vegan-bg);
+  --color-dietary-vegan-text: var(--dietary-vegan-text);
+  --color-dietary-vegetarian-bg: var(--dietary-vegetarian-bg);
+  --color-dietary-vegetarian-text: var(--dietary-vegetarian-text);
+  --color-dietary-gluten-free-bg: var(--dietary-gluten-free-bg);
+  --color-dietary-gluten-free-text: var(--dietary-gluten-free-text);
+  --color-favorite: var(--favorite);
+  --color-favorite-bg: var(--favorite-bg);
   --font-sans: var(--font-dm-sans);
   --font-serif: var(--font-dm-serif);
 }
