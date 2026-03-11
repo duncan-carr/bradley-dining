@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx next:*)",
+      "WebFetch(domain:api.elevate-dxp.com)",
+      "Bash(curl -s -H \"store: ch_bradley_en\" -H \"magento-customer-group: b6589fc6ab0dc82cf12099d1c2d40ab994e8410c\" -H \"x-api-key: ElevateAPIProd\" -H \"Magento-Website-Code: ch_bradley\" -H \"Magento-Store-View-Code: ch_bradley_en\" -H \"Magento-Store-Code: ch_bradley\" \"https://api.elevate-dxp.com/api/mesh/c087f756-cc72-4649-a36f-3a41b700c519/graphql?query=query+getLocation\\(%24campus_url_key%3AString!%2C%24location_url_key%3AString!\\)%7BgetLocation\\(campusUrlKey%3A%24campus_url_key%2ClocationUrlKey%3A%24location_url_key\\)%7BcommerceAttributes%7Bchildren%7Bid+name+position%7Dmeal_periods%7Bid+name+position%7D%7D%7D%7D&operationName=getLocation&variables=%7B%22campus_url_key%22%3A%22campus%22%2C%22location_url_key%22%3A%22williams-dining%22%7D\" | python3 -m json.tool)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}
