@@ -10,9 +10,11 @@ import { parseMenuItem } from "@/lib/types";
 import type { Station, ParsedMenuItem } from "@/lib/types";
 import { getAutoMealSelection, filterMealPeriods } from "@/lib/mealSchedule";
 import { localToday } from "@/lib/date";
+import { useAllergenPreferences } from "@/hooks/useAllergenPreferences";
 import DatePicker from "@/components/DatePicker";
 import MealPeriodTabs from "@/components/MealPeriodTabs";
 import StationSection from "@/components/StationSection";
+import SettingsPanel from "@/components/SettingsPanel";
 
 function LoadingSkeleton() {
   return (
@@ -45,8 +47,9 @@ function LoadingSkeleton() {
 export default function Home() {
   const [date, setDate] = useState(localToday);
   const [mealPeriod, setMealPeriod] = useState<number | null>(null);
-  const [reordering, setReordering] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const userOverrodeMeal = useRef(false);
+  const allergenPrefs = useAllergenPreferences();
 
   const [collapsedStations, setCollapsedStations] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set();
@@ -89,7 +92,6 @@ export default function Home() {
     }
   }, [location, date, visiblePeriods]);
 
-  // When viewing a non-today date and no meal is selected yet, default to first
   useEffect(() => {
     if (mealPeriod === null && visiblePeriods.length > 0) {
       const sorted = [...visiblePeriods].sort((a, b) => a.position - b.position);
@@ -177,6 +179,36 @@ export default function Home() {
     return map;
   }, [recipes, parsedItems]);
 
+  const filteredStationItemMap = useMemo(() => {
+    if (allergenPrefs.activeFilterCount === 0) return stationItemMap;
+    const filtered = new Map<string, ParsedMenuItem[]>();
+    for (const [stationId, items] of stationItemMap) {
+      filtered.set(
+        stationId,
+        items.filter((item) => {
+          if (allergenPrefs.hideUnknown && item.allergenStatus === "unknown") return false;
+          if (allergenPrefs.hiddenAllergens.size > 0 && item.allergens.some((a) => allergenPrefs.hiddenAllergens.has(a))) return false;
+          return true;
+        })
+      );
+    }
+    return filtered;
+  }, [stationItemMap, allergenPrefs.hiddenAllergens, allergenPrefs.hideUnknown, allergenPrefs.activeFilterCount]);
+
+  const filteredItemCount = useMemo(() => {
+    let count = 0;
+    for (const items of filteredStationItemMap.values()) count += items.length;
+    return count;
+  }, [filteredStationItemMap]);
+
+  const stationItemCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const [id, items] of filteredStationItemMap) {
+      counts.set(id, items.length);
+    }
+    return counts;
+  }, [filteredStationItemMap]);
+
   // Station reordering
   const stationById = useMemo(() => new Map(stations.map((s) => [s.id.toString(), s])), [stations]);
   const defaultMealStationIds = useMemo(() => {
@@ -186,7 +218,7 @@ export default function Home() {
     return list.map((s) => s.id.toString());
   }, [stations, shouldSeparateAllDay, allDayStationIds]);
 
-  const { applyOrder, moveStation, resetOrder, hasCustomOrder } = useStationOrder(defaultMealStationIds);
+  const { applyOrder, moveStation, reorderTo, resetOrder, hasCustomOrder } = useStationOrder(defaultMealStationIds);
 
   const [orderedMealStationIds, setOrderedMealStationIds] = useState<string[]>([]);
 
@@ -201,10 +233,17 @@ export default function Home() {
     [moveStation]
   );
 
+  const handleReorder = useCallback(
+    (newOrder: string[]) => {
+      reorderTo(newOrder);
+      setOrderedMealStationIds(newOrder);
+    },
+    [reorderTo]
+  );
+
   const handleResetOrder = useCallback(() => {
     resetOrder();
     setOrderedMealStationIds(defaultMealStationIds);
-    setReordering(false);
   }, [resetOrder, defaultMealStationIds]);
 
   const allDayStationList = useMemo(
@@ -220,7 +259,6 @@ export default function Home() {
   const today = localToday();
   const isToday = date === today;
 
-  // Check if the auto-selection would place us on tomorrow (dining closed for the night)
   const autoSelection = useMemo(() => getAutoMealSelection(visiblePeriods), [visiblePeriods]);
   const isAutoTomorrow = autoSelection !== null && autoSelection.date !== today && date === autoSelection.date;
 
@@ -228,6 +266,8 @@ export default function Home() {
     const d = new Date(date + "T12:00:00");
     return d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
   })();
+
+  const settingsBadgeCount = allergenPrefs.activeFilterCount;
 
   return (
     <div className="min-h-screen bg-background">
@@ -286,7 +326,7 @@ export default function Home() {
       </header>
 
       <main className="mx-auto max-w-3xl px-4 py-4 sm:px-5 sm:py-6">
-        {/* Meal period tabs + item count */}
+        {/* Meal period tabs + toolbar */}
         {location && (
           <div className="mb-5 animate-fade-in sm:mb-8">
             <MealPeriodTabs
@@ -295,34 +335,62 @@ export default function Home() {
               onSelect={handleMealSelect}
             />
             {!loading && totalItems > 0 && (
-              <div className="mt-3 flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">
-                  {totalItems} {totalItems === 1 ? "item" : "items"} on the menu
-                </p>
-                <div className="flex items-center gap-2">
-                  {reordering && hasCustomOrder && (
-                    <button
-                      onClick={handleResetOrder}
-                      className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-surface-warm hover:text-foreground"
-                    >
-                      Reset
-                    </button>
-                  )}
+              <>
+                <div className="mt-3 flex items-center justify-between gap-2">
                   <button
-                    onClick={() => setReordering((r) => !r)}
-                    className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all ${
-                      reordering
+                    onClick={() => setSettingsOpen((o) => !o)}
+                    className={`flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all active:scale-95 ${
+                      settingsOpen || settingsBadgeCount > 0
                         ? "bg-bradley-red text-white shadow-sm"
                         : "text-muted-foreground hover:bg-surface-warm hover:text-foreground"
                     }`}
                   >
                     <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
-                    {reordering ? "Done" : "Reorder"}
+                    Settings
+                    {settingsBadgeCount > 0 && (
+                      <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-white/25 px-1 text-[0.625rem] font-bold leading-none">
+                        {settingsBadgeCount}
+                      </span>
+                    )}
                   </button>
+                  <p className="text-sm text-muted-foreground">
+                    {allergenPrefs.activeFilterCount > 0
+                      ? `${filteredItemCount} of ${totalItems} items`
+                      : `${totalItems} ${totalItems === 1 ? "item" : "items"} on the menu`}
+                  </p>
                 </div>
-              </div>
+
+                {/* Settings panel */}
+                <div
+                  className="grid transition-[grid-template-rows] duration-300 ease-in-out"
+                  style={{ gridTemplateRows: settingsOpen ? "1fr" : "0fr" }}
+                >
+                  <div className="overflow-hidden">
+                    <div className="pt-3">
+                      <SettingsPanel
+                        hiddenAllergens={allergenPrefs.hiddenAllergens}
+                        hideUnknown={allergenPrefs.hideUnknown}
+                        showOnItems={allergenPrefs.showOnItems}
+                        onToggleAllergen={allergenPrefs.toggleAllergen}
+                        onToggleHideUnknown={allergenPrefs.setHideUnknown}
+                        onToggleShowOnItems={allergenPrefs.setShowOnItems}
+                        onClearAllAllergens={allergenPrefs.clearAll}
+                        activeFilterCount={allergenPrefs.activeFilterCount}
+                        orderedStationIds={orderedMealStationIds}
+                        stationById={stationById}
+                        stationItemCounts={stationItemCounts}
+                        onReorder={handleReorder}
+                        onMoveStation={handleMove}
+                        onResetOrder={handleResetOrder}
+                        hasCustomOrder={hasCustomOrder}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
           </div>
         )}
@@ -369,7 +437,7 @@ export default function Home() {
             {orderedMealStationIds.map((id, index) => {
               const station = stationById.get(id);
               if (!station) return null;
-              const items = stationItemMap.get(id) ?? [];
+              const items = filteredStationItemMap.get(id) ?? [];
               return (
                 <StationSection
                   key={id}
@@ -381,16 +449,12 @@ export default function Home() {
                   index={index}
                   expanded={!collapsedStations.has(id)}
                   onToggle={() => toggleStation(id)}
-                  reordering={reordering}
-                  canMoveUp={index > 0}
-                  canMoveDown={index < orderedMealStationIds.length - 1}
-                  onMoveUp={() => handleMove(id, -1)}
-                  onMoveDown={() => handleMove(id, 1)}
+                  showAllergens={allergenPrefs.showOnItems}
                 />
               );
             })}
 
-            {allDayStationList.length > 0 && allDayStationList.some((s) => (stationItemMap.get(s.id.toString()) ?? []).length > 0) && (
+            {allDayStationList.length > 0 && allDayStationList.some((s) => (filteredStationItemMap.get(s.id.toString()) ?? []).length > 0) && (
               <>
                 <div className="flex items-center gap-3 pt-2">
                   <div className="h-px flex-1 bg-border" />
@@ -400,7 +464,7 @@ export default function Home() {
                   <div className="h-px flex-1 bg-border" />
                 </div>
                 {allDayStationList.map((station, i) => {
-                  const items = stationItemMap.get(station.id.toString()) ?? [];
+                  const items = filteredStationItemMap.get(station.id.toString()) ?? [];
                   return (
                     <StationSection
                       key={station.id}
@@ -412,6 +476,7 @@ export default function Home() {
                       index={orderedMealStationIds.length + i}
                       expanded={!collapsedStations.has(station.id.toString())}
                       onToggle={() => toggleStation(station.id.toString())}
+                      showAllergens={allergenPrefs.showOnItems}
                     />
                   );
                 })}

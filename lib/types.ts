@@ -70,10 +70,14 @@ export interface RecipesData {
   } | null;
 }
 
+export type AllergenStatus = "known" | "none" | "unknown";
+
 export interface ParsedMenuItem extends MenuItem {
   marketingName: string;
   marketingDescription: string;
   allergenStatement: string;
+  allergens: string[];
+  allergenStatus: AllergenStatus;
   calories: string;
   protein: string;
   totalFat: string;
@@ -85,11 +89,22 @@ export function parseMenuItem(item: MenuItem): ParsedMenuItem {
   const attr = (name: string) =>
     item.attributes.find((a) => a.name === name)?.value ?? "";
 
+  const statement = attr("allergen_statement");
+  let allergens: string[] = [];
+  let allergenStatus: AllergenStatus = "unknown";
+  if (statement.startsWith("Contains:")) {
+    const list = statement.replace("Contains:", "").trim();
+    allergens = list ? list.split(",").map((s) => s.trim()).filter(Boolean) : [];
+    allergenStatus = allergens.length > 0 ? "known" : "none";
+  }
+
   return {
     ...item,
     marketingName: attr("marketing_name") || item.name,
     marketingDescription: attr("marketing_description"),
-    allergenStatement: attr("allergen_statement"),
+    allergenStatement: statement,
+    allergens,
+    allergenStatus,
     calories: attr("calories"),
     protein: attr("protein"),
     totalFat: attr("total_fat"),

@@ -64,6 +64,14 @@ export function useStationOrder(defaultIds: string[]) {
     [persist]
   );
 
+  const reorderTo = useCallback(
+    (newOrder: string[]) => {
+      persist(newOrder);
+      return newOrder;
+    },
+    [persist]
+  );
+
   const resetOrder = useCallback(() => {
     setSavedOrder(null);
     try {
@@ -73,5 +81,5 @@ export function useStationOrder(defaultIds: string[]) {
     }
   }, []);
 
-  return { applyOrder, moveStation, resetOrder, hasCustomOrder: savedOrder !== null };
+  return { applyOrder, moveStation, reorderTo, resetOrder, hasCustomOrder: savedOrder !== null };
 }

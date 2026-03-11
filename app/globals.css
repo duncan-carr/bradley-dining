@@ -21,6 +21,10 @@
   --amber-bg: #FFFBEB;
   --nutrition-bg: #F5F0E8;
   --nutrition-text: #78716C;
+  --allergen-bg: #FEF3C7;
+  --allergen-text: #92400E;
+  --allergen-active-bg: #C41230;
+  --allergen-active-text: #FFFFFF;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -40,6 +44,10 @@
     --amber-bg: rgba(217, 119, 6, 0.12);
     --nutrition-bg: #292524;
     --nutrition-text: #A8998A;
+    --allergen-bg: rgba(245, 158, 11, 0.15);
+    --allergen-text: #FBBF24;
+    --allergen-active-bg: #C41230;
+    --allergen-active-text: #FFFFFF;
   }
 }
 
@@ -64,6 +72,10 @@
   --color-amber-bg: var(--amber-bg);
   --color-nutrition-bg: var(--nutrition-bg);
   --color-nutrition-text: var(--nutrition-text);
+  --color-allergen-bg: var(--allergen-bg);
+  --color-allergen-text: var(--allergen-text);
+  --color-allergen-active-bg: var(--allergen-active-bg);
+  --color-allergen-active-text: var(--allergen-active-text);
   --font-sans: var(--font-dm-sans);
   --font-serif: var(--font-dm-serif);
 }
