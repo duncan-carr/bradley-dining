@@ -92,12 +92,15 @@ export default function Home() {
     }
   }, [location, date, visiblePeriods]);
 
+  // Fallback: default to first period for non-today dates or when auto-selection doesn't apply.
+  // Skips when auto-selection should handle it (today + location loaded) to avoid a race
+  // where both effects fire in the same cycle and this one overwrites the auto-selection.
   useEffect(() => {
-    if (mealPeriod === null && visiblePeriods.length > 0) {
-      const sorted = [...visiblePeriods].sort((a, b) => a.position - b.position);
-      setMealPeriod(sorted[0].id);
-    }
-  }, [mealPeriod, visiblePeriods]);
+    if (mealPeriod !== null || visiblePeriods.length === 0) return;
+    if (location && date === localToday() && !userOverrodeMeal.current) return;
+    const sorted = [...visiblePeriods].sort((a, b) => a.position - b.position);
+    setMealPeriod(sorted[0].id);
+  }, [mealPeriod, visiblePeriods, location, date]);
 
   const handleDateChange = (newDate: string) => {
     userOverrodeMeal.current = false;
