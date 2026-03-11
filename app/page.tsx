@@ -404,6 +404,15 @@ export default function Home() {
         <p className="text-xs text-muted">
           Menu data from Aramark &middot; Vote on your favorites
         </p>
+        <p className="mt-2 text-xs text-muted">
+          Need to do laundry? Check out{" "}
+          <a
+            href="https://laundry.duncancarr.com"
+            className="font-semibold text-bradley-red underline underline-offset-2 hover:text-bradley-red/80"
+          >
+            the better laundry tracker
+          </a>
+        </p>
       </footer>
     </div>
   );
